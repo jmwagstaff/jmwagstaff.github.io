@@ -1,0 +1,100 @@
+---
+title: "Predicting Activity Quality"
+author: "Jacques wagstaff"
+date: "30 January 2017"
+output: html_document
+---
+
+## Course Project
+In this project we are trying to predict the activity quality during a fitness 
+training exercise. Data from accelerometers on the belt, forearm, arm, 
+and dumbell of 6 participants was collected. They were asked to perform barbell 
+lifts correctly and incorrectly in 5 different ways. The goal of your project is 
+to predict the manner in which they did the exercise. This is the "classe" 
+variable: factor with 5 levels A,B,C,D,E.
+
+## Loading and cleaning the data
+First we load the data:
+```{r}
+dat<- read.csv("./pml-training.csv") #build and test model here
+QuizTest<- read.csv("./pml-testing.csv") #this is for assignment testing
+```
+
+Next we split the data for training and testing:
+```{r, message=FALSE}
+set.seed(325)
+library(caret) # first we split the data
+inTrain <- createDataPartition(y=dat$classe, p = 0.6, list = F)
+training <- dat[ inTrain,]
+testing <- dat[-inTrain,]
+```
+
+We have a data frame with 160 variables. Looking at the first few columns, 
+we can see that there are a few identification variables which are not important 
+for prediction, and some variables which must be removed to build a prediction 
+model. We remove the first 7 columns:
+```{r}
+training <- training[, -(1:7)]
+testing  <- testing[, -(1:7)]
+```
+There are still many variables left 153 that are potential predictors. 
+Next, we find variables with little variance, which are therefore bad 
+predictors, and remove them from data frame:
+```{r}
+nonVar <- nearZeroVar(training) #check only in the training set
+training <- training[, -nonVar]
+testing  <- testing[, -nonVar]
+```
+We are now left with 99 variables.
+
+By taking a quick look at the data, we can see many columns with many
+missing values. If there are too many missing values for a particular 
+variable it will not be a good predictor. We therefore calculate the percentage 
+of missing values in each col and plot the results:
+```{r}
+percentNA <- sapply(training, function(x) mean(is.na(x)))
+```
+```{r, echo=FALSE, fig.height=4, fig.width=4, fig.align='center'}
+hist(percentNA) 
+```
+We can see that there are about 45 variables with a large percentage of missing 
+values, and 53 variables that have zero NAs, we will use only these for prediction.
+We make a logical vector for subsetting:
+```{r}
+noNA <- sapply(training, function(x) mean(is.na(x)))==0
+training <- training[, noNA]
+testing  <- testing[, noNA]
+```
+We will use all remaining variables to build the model.
+
+## Bulding a predictive model
+
+We apply a random forest model, since these models are generally regarded as 
+some of the best for classification problems. We choose options for 
+cross-validation and number is three times
+```{r}
+set.seed(332)
+mod<-train(classe~., method="rf",data=training, 
+            trControl=trainControl(method="cv", number=3, verboseIter=FALSE))
+```
+Looking at the final model:
+```{r}
+mod$finalModel
+```
+
+To estimate the expected out of sample error rate we use the testing data set:
+```{r}
+pred <- predict(mod, newdata=testing)
+confusionMatrix(pred, testing$classe)$overall[1] # extract accuracy only
+```
+We have obtained a model with a very high prediction accuracy of 99.16%. Therefore
+we do not need to build another model, since it will be hard to build a more 
+accurate model.
+
+## Assignment predictions
+Finally predicting using the new data:
+```{r}
+predict(mod, newdata=QuizTest)
+```
+Hence our assignment predictions are:
+B A B A A E D B A A B C B A E E A B B B
